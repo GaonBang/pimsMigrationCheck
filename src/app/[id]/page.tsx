@@ -1,6 +1,7 @@
 import type { WithId, Document } from "mongodb";
 import { ObjectId } from "mongodb";
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import clientPromise from "@/lib/mongodb";
 import { getSavedImageIds } from "@/lib/actions";
@@ -29,19 +30,66 @@ async function getImages(userId: string): Promise<WithId<Document>[]> {
 	return db.collection("Image").find({ userId, deleted: false }).toArray();
 }
 
+async function ImageGrid({ id, email }: { id: string; email: string }) {
+	const images = await getImages(id);
+	const savedIds = await getSavedImageIds(id);
+	const savedSet = new Set(savedIds);
+
+	return (
+		<section className={styles.section}>
+			<div className={styles.sectionHeader}>
+				<h2 className={styles.sectionTitle}>
+					Images
+					<span className={styles.badge}>{images.length}</span>
+				</h2>
+				{images.length > 0 && (
+					<SaveAllButton
+						email={email}
+						userId={id}
+						images={images.map((img) => ({
+							id: String(img._id),
+							name: String(img.name ?? ""),
+						}))}
+					/>
+				)}
+			</div>
+
+			{images.length === 0 && (
+				<p className={styles.empty}>이미지가 없습니다.</p>
+			)}
+
+			{images.length > 0 && (
+				<div className={styles.grid}>
+					{images.map((img) => {
+						const imgId = String(img._id);
+						return (
+							<ImageRow
+								key={imgId}
+								email={email}
+								userId={id}
+								imageId={imgId}
+								imageName={String(img.name ?? "")}
+								saved={savedSet.has(imgId)}
+							/>
+						);
+					})}
+				</div>
+			)}
+		</section>
+	);
+}
+
 export default async function UserDetailPage({
 	params,
 }: {
 	params: Promise<{ id: string }>;
 }) {
 	const { id } = await params;
-	const [user, images] = await Promise.all([getUser(id), getImages(id)]);
+	const user = await getUser(id);
 
 	if (!user) notFound();
 
 	const email = String(user.email ?? "");
-	const savedIds = await getSavedImageIds(id);
-	const savedSet = new Set(savedIds);
 
 	return (
 		<div className={styles.page}>
@@ -55,58 +103,11 @@ export default async function UserDetailPage({
 					<p className={styles.subtitle}>ID: {id}</p>
 				</header>
 
-				<section className={styles.section}>
-					<div className={styles.sectionHeader}>
-						<h2 className={styles.sectionTitle}>
-							Images
-							<span className={styles.badge}>{images.length}</span>
-						</h2>
-						{images.length > 0 && (
-							<SaveAllButton
-								email={email}
-								userId={id}
-								images={images.map((img) => ({
-									id: String(img._id),
-									name: String(img.name ?? ""),
-								}))}
-							/>
-						)}
-					</div>
-
-					{images.length === 0 && (
-						<p className={styles.empty}>이미지가 없습니다.</p>
-					)}
-
-					{images.length > 0 && (
-						<div className={styles.tableWrap}>
-							<table className={styles.table}>
-								<thead>
-									<tr>
-										<th className={styles.th}>#</th>
-										<th className={styles.th}>Name</th>
-										<th className={styles.th} />
-									</tr>
-								</thead>
-								<tbody>
-									{images.map((img, idx) => {
-										const imgId = String(img._id);
-										return (
-											<ImageRow
-												key={imgId}
-												idx={idx + 1}
-												email={email}
-												userId={id}
-												imageId={imgId}
-												imageName={String(img.name ?? "")}
-												saved={savedSet.has(imgId)}
-											/>
-										);
-									})}
-								</tbody>
-							</table>
-						</div>
-					)}
-				</section>
+				<Suspense
+					fallback={<p className={styles.empty}>이미지 불러오는 중...</p>}
+				>
+					<ImageGrid id={id} email={email} />
+				</Suspense>
 			</main>
 		</div>
 	);

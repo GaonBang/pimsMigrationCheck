@@ -29,7 +29,7 @@ export default function SaveAllButton({
 			onClick={handleClick}
 			disabled={isPending}
 		>
-			{isPending ? "저장 중..." : "All Save"}
+			{isPending ? "저장 중..." : "Select All"}
 		</button>
 	);
 }

@@ -1,18 +1,16 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { saveImage } from "@/lib/actions";
+import { saveImage, unsaveImage } from "@/lib/actions";
 import styles from "@/app/[id]/page.module.css";
 
 export default function ImageRow({
-	idx,
 	email,
 	userId,
 	imageId,
 	imageName,
 	saved: initialSaved,
 }: {
-	idx: number;
 	email: string;
 	userId: string;
 	imageId: string;
@@ -35,26 +33,25 @@ export default function ImageRow({
 	}, []);
 
 	function handleClick() {
+		if (isPending) return;
 		startTransition(async () => {
-			await saveImage(email, userId, imageId, imageName);
-			setSaved(true);
+			if (saved) {
+				await unsaveImage(userId, imageId);
+				setSaved(false);
+			} else {
+				await saveImage(email, userId, imageId, imageName);
+				setSaved(true);
+			}
 		});
 	}
 
 	return (
-		<tr className={saved ? styles.savedRow : undefined}>
-			<td className={styles.td}>{idx}</td>
-			<td className={styles.td}>{imageName || "-"}</td>
-			<td className={`${styles.td} ${styles.tdAction}`}>
-				<button
-					type="button"
-					className={`${styles.saveBtn} ${saved ? styles.saved : ""}`}
-					onClick={handleClick}
-					disabled={isPending || saved}
-				>
-					{isPending ? "..." : saved ? "Saved" : "Save"}
-				</button>
-			</td>
-		</tr>
+		<button
+			type="button"
+			className={`${styles.cell} ${saved ? styles.cellSaved : ""} ${isPending ? styles.cellPending : ""}`}
+			onClick={handleClick}
+		>
+			<span className={styles.cellName}>{imageName || "-"}</span>
+		</button>
 	);
 }
