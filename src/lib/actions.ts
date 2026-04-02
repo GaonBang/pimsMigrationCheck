@@ -14,19 +14,105 @@ interface SavedEntry {
 	images: SavedImage[];
 }
 
-const FILE_PATH = path.join(process.cwd(), "data", "saved.json");
+const DATA_DIR = process.env.DATA_DIR ?? path.join(process.cwd(), "data");
+const FILE_PATH = path.join(DATA_DIR, "saved.json");
 
-async function readSaved(): Promise<SavedEntry[]> {
+function createDataFileError(filePath: string, error: unknown) {
+	if (
+		typeof error === "object" &&
+		error !== null &&
+		"code" in error &&
+		error.code === "EACCES"
+	) {
+		return new Error(
+			`Cannot write ${filePath}. On Linux bind mounts, ensure ./data is writable by the container user (uid 1001) or run the container with a matching --user.`,
+		);
+	}
+
+	if (error instanceof SyntaxError) {
+		return new Error(`Invalid JSON in ${filePath}. Check the file contents.`);
+	}
+
+	if (error instanceof Error) {
+		return new Error(`${filePath}: ${error.message}`);
+	}
+
+	return new Error(`Failed to access ${filePath}.`);
+}
+
+function isSavedEntry(value: unknown): value is SavedEntry {
+	if (typeof value !== "object" || value === null) return false;
+
+	const candidate = value as Partial<SavedEntry>;
+	return (
+		typeof candidate.email === "string" &&
+		typeof candidate.id === "string" &&
+		Array.isArray(candidate.images) &&
+		candidate.images.every(
+			(image) =>
+				typeof image === "object" &&
+				image !== null &&
+				"id" in image &&
+				"name" in image &&
+				typeof image.id === "string" &&
+				typeof image.name === "string",
+		)
+	);
+}
+
+async function readJsonFile<T>(
+	filePath: string,
+	validate: (value: unknown) => value is T,
+	fallback: T,
+): Promise<T> {
 	try {
-		const raw = await fs.readFile(FILE_PATH, "utf-8");
-		return JSON.parse(raw);
-	} catch {
-		return [];
+		const raw = await fs.readFile(filePath, "utf-8");
+		const parsed: unknown = JSON.parse(raw);
+
+		if (!validate(parsed)) {
+			throw new Error(`Unexpected JSON shape in ${filePath}.`);
+		}
+
+		return parsed;
+	} catch (error) {
+		if (
+			typeof error === "object" &&
+			error !== null &&
+			"code" in error &&
+			error.code === "ENOENT"
+		) {
+			return fallback;
+		}
+
+		throw createDataFileError(filePath, error);
 	}
 }
 
+async function writeJsonFile(filePath: string, data: unknown) {
+	const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+
+	try {
+		await fs.mkdir(path.dirname(filePath), { recursive: true });
+		await fs.writeFile(tempPath, JSON.stringify(data, null, 2), "utf-8");
+		await fs.rename(tempPath, filePath);
+	} catch (error) {
+		throw createDataFileError(filePath, error);
+	} finally {
+		await fs.rm(tempPath, { force: true }).catch(() => undefined);
+	}
+}
+
+async function readSaved(): Promise<SavedEntry[]> {
+	return readJsonFile(
+		FILE_PATH,
+		(value): value is SavedEntry[] =>
+			Array.isArray(value) && value.every(isSavedEntry),
+		[],
+	);
+}
+
 async function writeSaved(data: SavedEntry[]) {
-	await fs.writeFile(FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
+	await writeJsonFile(FILE_PATH, data);
 }
 
 export async function saveImage(
@@ -113,37 +199,38 @@ interface DomainEntry {
 	active: boolean;
 }
 
-const DOMAINS_FILE_PATH = path.join(process.cwd(), "data", "domains.json");
-const DOMAINS_SAVED_FILE_PATH = path.join(
-	process.cwd(),
-	"data",
-	"domainsSaved.json",
-);
+function isDomainEntry(value: unknown): value is DomainEntry {
+	if (typeof value !== "object" || value === null) return false;
+
+	const candidate = value as Partial<DomainEntry>;
+	return (
+		typeof candidate.domain === "string" && typeof candidate.active === "boolean"
+	);
+}
+
+const DOMAINS_FILE_PATH = path.join(DATA_DIR, "domains.json");
+const DOMAINS_SAVED_FILE_PATH = path.join(DATA_DIR, "domainsSaved.json");
 
 async function readDomains(): Promise<DomainEntry[]> {
-	try {
-		const raw = await fs.readFile(DOMAINS_FILE_PATH, "utf-8");
-		return JSON.parse(raw);
-	} catch {
-		return [];
-	}
+	return readJsonFile(
+		DOMAINS_FILE_PATH,
+		(value): value is DomainEntry[] =>
+			Array.isArray(value) && value.every(isDomainEntry),
+		[],
+	);
 }
 
 async function readSavedDomains(): Promise<string[]> {
-	try {
-		const raw = await fs.readFile(DOMAINS_SAVED_FILE_PATH, "utf-8");
-		return JSON.parse(raw);
-	} catch {
-		return [];
-	}
+	return readJsonFile(
+		DOMAINS_SAVED_FILE_PATH,
+		(value): value is string[] =>
+			Array.isArray(value) && value.every((entry) => typeof entry === "string"),
+		[],
+	);
 }
 
 async function writeSavedDomains(data: string[]) {
-	await fs.writeFile(
-		DOMAINS_SAVED_FILE_PATH,
-		JSON.stringify(data, null, 2),
-		"utf-8",
-	);
+	await writeJsonFile(DOMAINS_SAVED_FILE_PATH, data);
 }
 
 export async function getAllDomains(): Promise<DomainEntry[]> {

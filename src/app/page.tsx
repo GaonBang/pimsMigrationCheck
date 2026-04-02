@@ -24,6 +24,7 @@ async function getUsers(query?: string): Promise<WithId<Document>[]> {
 async function UserGrid({ q }: { q?: string }) {
 	let users: WithId<Document>[] = [];
 	let error: string | null = null;
+	let savedUserIds = new Set<string>();
 
 	try {
 		users = await getUsers(q);
@@ -31,7 +32,11 @@ async function UserGrid({ q }: { q?: string }) {
 		error = e instanceof Error ? e.message : "DB 연결에 실패했습니다.";
 	}
 
-	const savedUserIds = await getSavedUserIds();
+	try {
+		savedUserIds = await getSavedUserIds();
+	} catch (e) {
+		error = e instanceof Error ? e.message : "저장 데이터 파일을 읽지 못했습니다.";
+	}
 
 	return (
 		<>

@@ -32,11 +32,21 @@ async function getImages(userId: string): Promise<WithId<Document>[]> {
 
 async function ImageGrid({ id, email }: { id: string; email: string }) {
 	const images = await getImages(id);
-	const savedIds = await getSavedImageIds(id);
+	let error: string | null = null;
+	let savedIds: string[] = [];
+
+	try {
+		savedIds = await getSavedImageIds(id);
+	} catch (e) {
+		error = e instanceof Error ? e.message : "저장 데이터 파일을 읽지 못했습니다.";
+	}
+
 	const savedSet = new Set(savedIds);
 
 	return (
 		<section className={styles.section}>
+			{error && <div className={styles.error}>{error}</div>}
+
 			<div className={styles.sectionHeader}>
 				<h2 className={styles.sectionTitle}>
 					Images

@@ -5,6 +5,22 @@ import { getAllDomains, getAllSaved, getSavedDomains } from "@/lib/actions";
 import SearchInput from "@/components/search-input";
 import styles from "./page.module.css";
 
+interface SavedImage {
+	id: string;
+	name: string;
+}
+
+interface SavedEntry {
+	email: string;
+	id: string;
+	images: SavedImage[];
+}
+
+interface DomainEntry {
+	domain: string;
+	active: boolean;
+}
+
 export const metadata: Metadata = {
 	title: "저장된 항목 | STG-DEV-Pathoaid",
 };
@@ -18,11 +34,21 @@ export default async function SavedPage({
 }) {
 	const { q, tab } = await searchParams;
 	const currentTab = tab === "domain" ? "domain" : "image";
-	const [allSaved, allDomains, savedDomains] = await Promise.all([
-		getAllSaved(),
-		getAllDomains(),
-		getSavedDomains(),
-	]);
+	let error: string | null = null;
+	let allSaved: SavedEntry[] = [];
+	let allDomains: DomainEntry[] = [];
+	let savedDomains: string[] = [];
+
+	try {
+		[allSaved, allDomains, savedDomains] = await Promise.all([
+			getAllSaved(),
+			getAllDomains(),
+			getSavedDomains(),
+		]);
+	} catch (e) {
+		error =
+			e instanceof Error ? e.message : "저장 데이터 파일을 읽지 못했습니다.";
+	}
 
 	const filteredImages = q
 		? allSaved
@@ -70,6 +96,8 @@ export default async function SavedPage({
 						{q && ` · "${q}" 검색 결과`}
 					</p>
 				</header>
+
+				{error && <div className={styles.error}>{error}</div>}
 
 				<nav className={styles.tabs} aria-label="저장된 항목 탭">
 					<Link
