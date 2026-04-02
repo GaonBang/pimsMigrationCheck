@@ -105,3 +105,70 @@ export async function getSavedUserIds(): Promise<Set<string>> {
 	const data = await readSaved();
 	return new Set(data.map((e) => e.id));
 }
+
+// ─── Domains ───────────────────────────────────────────────────────────────
+
+interface DomainEntry {
+	domain: string;
+	active: boolean;
+}
+
+const DOMAINS_FILE_PATH = path.join(process.cwd(), "data", "domains.json");
+const DOMAINS_SAVED_FILE_PATH = path.join(
+	process.cwd(),
+	"data",
+	"domainsSaved.json",
+);
+
+async function readDomains(): Promise<DomainEntry[]> {
+	try {
+		const raw = await fs.readFile(DOMAINS_FILE_PATH, "utf-8");
+		return JSON.parse(raw);
+	} catch {
+		return [];
+	}
+}
+
+async function readSavedDomains(): Promise<string[]> {
+	try {
+		const raw = await fs.readFile(DOMAINS_SAVED_FILE_PATH, "utf-8");
+		return JSON.parse(raw);
+	} catch {
+		return [];
+	}
+}
+
+async function writeSavedDomains(data: string[]) {
+	await fs.writeFile(
+		DOMAINS_SAVED_FILE_PATH,
+		JSON.stringify(data, null, 2),
+		"utf-8",
+	);
+}
+
+export async function getAllDomains(): Promise<DomainEntry[]> {
+	return readDomains();
+}
+
+export async function getSavedDomains(): Promise<string[]> {
+	return readSavedDomains();
+}
+
+export async function saveDomain(domain: string) {
+	const data = await readSavedDomains();
+
+	if (!data.includes(domain)) {
+		data.push(domain);
+		await writeSavedDomains(data);
+	}
+
+	return { success: true };
+}
+
+export async function unsaveDomain(domain: string) {
+	const data = await readSavedDomains();
+	const next = data.filter((savedDomain) => savedDomain !== domain);
+
+	await writeSavedDomains(next);
+	return { success: true };
+}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import type { ChangeEvent } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 import styles from "@/app/page.module.css";
 
@@ -9,20 +10,24 @@ export default function SearchInput({
 }: {
 	placeholder?: string;
 }) {
+	const pathname = usePathname();
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const [isPending, startTransition] = useTransition();
 
 	const q = searchParams.get("q") ?? "";
 
-	function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+	function handleChange(e: ChangeEvent<HTMLInputElement>) {
 		const value = e.target.value;
 		startTransition(() => {
-			const params = new URLSearchParams();
+			const params = new URLSearchParams(searchParams.toString());
 			if (value) {
 				params.set("q", value);
+			} else {
+				params.delete("q");
 			}
-			router.replace(`?${params.toString()}`);
+			const queryString = params.toString();
+			router.replace(queryString ? `${pathname}?${queryString}` : pathname);
 		});
 	}
 

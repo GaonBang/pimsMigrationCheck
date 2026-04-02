@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
-import { getAllSaved } from "@/lib/actions";
+import { getAllDomains, getAllSaved, getSavedDomains } from "@/lib/actions";
 import SearchInput from "@/components/search-input";
 import styles from "./page.module.css";
 
@@ -14,12 +14,17 @@ export const dynamic = "force-dynamic";
 export default async function SavedPage({
 	searchParams,
 }: {
-	searchParams: Promise<{ q?: string }>;
+	searchParams: Promise<{ q?: string; tab?: string }>;
 }) {
-	const { q } = await searchParams;
-	const allSaved = await getAllSaved();
+	const { q, tab } = await searchParams;
+	const currentTab = tab === "domain" ? "domain" : "image";
+	const [allSaved, allDomains, savedDomains] = await Promise.all([
+		getAllSaved(),
+		getAllDomains(),
+		getSavedDomains(),
+	]);
 
-	const filtered = q
+	const filteredImages = q
 		? allSaved
 				.map((entry) => {
 					const query = q.toLowerCase();
@@ -36,10 +41,18 @@ export default async function SavedPage({
 				.filter(Boolean)
 		: allSaved;
 
-	const totalImages = filtered.reduce(
+	const totalImages = filteredImages.reduce(
 		(sum, e) => sum + (e?.images.length ?? 0),
 		0,
 	);
+	const savedDomainsWithMeta = savedDomains
+		.map((domain) => ({
+			domain,
+			active: allDomains.find((entry) => entry.domain === domain)?.active ?? false,
+		}))
+		.filter((entry) =>
+			q ? entry.domain.toLowerCase().includes(q.toLowerCase()) : true,
+		);
 
 	return (
 		<div className={styles.page}>
@@ -51,45 +64,102 @@ export default async function SavedPage({
 				<header className={styles.header}>
 					<h1 className={styles.title}>저장된 항목</h1>
 					<p className={styles.subtitle}>
-						{filtered.length}명 · 이미지 {totalImages}건
+						{currentTab === "image"
+							? `${filteredImages.length}명 · 이미지 ${totalImages}건`
+							: `도메인 ${savedDomainsWithMeta.length}개`}
 						{q && ` · "${q}" 검색 결과`}
 					</p>
 				</header>
 
+				<nav className={styles.tabs} aria-label="저장된 항목 탭">
+					<Link
+						href={`/saved${q ? `?tab=image&q=${encodeURIComponent(q)}` : "?tab=image"}`}
+						className={`${styles.tab} ${currentTab === "image" ? styles.tabActive : ""}`}
+					>
+						image
+					</Link>
+					<Link
+						href={`/saved${q ? `?tab=domain&q=${encodeURIComponent(q)}` : "?tab=domain"}`}
+						className={`${styles.tab} ${currentTab === "domain" ? styles.tabActive : ""}`}
+					>
+						도메인
+					</Link>
+				</nav>
+
 				<Suspense>
-					<SearchInput placeholder="이메일 또는 이미지 이름 검색..." />
+					<SearchInput
+						placeholder={
+							currentTab === "image"
+								? "이메일 또는 이미지 이름 검색..."
+								: "도메인 검색..."
+						}
+					/>
 				</Suspense>
 
-				{filtered.length === 0 && (
-					<p className={styles.empty}>
-						{q
-							? `"${q}"에 해당하는 항목이 없습니다.`
-							: "저장된 항목이 없습니다."}
-					</p>
+				{currentTab === "image" && (
+					<>
+						{filteredImages.length === 0 && (
+							<p className={styles.empty}>
+								{q
+									? `"${q}"에 해당하는 항목이 없습니다.`
+									: "저장된 이미지 항목이 없습니다."}
+							</p>
+						)}
+
+						{filteredImages.map(
+							(entry) =>
+								entry && (
+									<section key={entry.id} className={styles.section}>
+										<Link href={`/${entry.id}`} className={styles.userHeader}>
+											<span className={styles.email}>{entry.email}</span>
+											<span className={styles.badge}>
+												{entry.images.length}
+											</span>
+											<span className={styles.arrow}>→</span>
+										</Link>
+
+										<div className={styles.imageList}>
+											{entry.images.map((img, idx) => (
+												<div key={img.id} className={styles.imageItem}>
+													<span className={styles.imageIndex}>
+														{idx + 1}
+													</span>
+													<span className={styles.imageName}>
+														{img.name || "-"}
+													</span>
+												</div>
+											))}
+										</div>
+									</section>
+								),
+						)}
+					</>
 				)}
 
-				{filtered.map(
-					(entry) =>
-						entry && (
-							<section key={entry.id} className={styles.section}>
-								<Link href={`/${entry.id}`} className={styles.userHeader}>
-									<span className={styles.email}>{entry.email}</span>
-									<span className={styles.badge}>{entry.images.length}</span>
-									<span className={styles.arrow}>→</span>
-								</Link>
+				{currentTab === "domain" && (
+					<>
+						{savedDomainsWithMeta.length === 0 && (
+							<p className={styles.empty}>
+								{q
+									? `"${q}"에 해당하는 도메인이 없습니다.`
+									: "저장된 도메인이 없습니다."}
+							</p>
+						)}
 
-								<div className={styles.imageList}>
-									{entry.images.map((img, idx) => (
-										<div key={img.id} className={styles.imageItem}>
-											<span className={styles.imageIndex}>{idx + 1}</span>
-											<span className={styles.imageName}>
-												{img.name || "-"}
-											</span>
-										</div>
-									))}
+						<div className={styles.domainList}>
+							{savedDomainsWithMeta.map((entry, idx) => (
+								<div key={entry.domain} className={styles.domainItem}>
+									<span className={styles.domainIndex}>{idx + 1}</span>
+									<span className={styles.domainName}>{entry.domain}</span>
+									<span
+										className={`${styles.status} ${entry.active ? styles.statusOn : styles.statusOff}`}
+									>
+										{entry.active ? "운영중" : "운영중지"}
+									</span>
 								</div>
-							</section>
-						),
+							))}
+						</div>
+					</>
 				)}
 			</main>
 		</div>
