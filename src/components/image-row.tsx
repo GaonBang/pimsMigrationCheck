@@ -10,12 +10,14 @@ export default function ImageRow({
 	imageId,
 	imageName,
 	saved: initialSaved,
+	migrated,
 }: {
 	email: string;
 	userId: string;
 	imageId: string;
 	imageName: string;
 	saved: boolean;
+	migrated: boolean;
 }) {
 	const [saved, setSaved] = useState(initialSaved);
 	const [isPending, startTransition] = useTransition();
@@ -26,14 +28,14 @@ export default function ImageRow({
 
 	useEffect(() => {
 		function handleAllSaved() {
-			setSaved(true);
+			if (!migrated) setSaved(true);
 		}
 		window.addEventListener("all-saved", handleAllSaved);
 		return () => window.removeEventListener("all-saved", handleAllSaved);
-	}, []);
+	}, [migrated]);
 
 	function handleClick() {
-		if (isPending) return;
+		if (migrated || isPending) return;
 		startTransition(async () => {
 			if (saved) {
 				await unsaveImage(userId, imageId);
@@ -45,11 +47,18 @@ export default function ImageRow({
 		});
 	}
 
+	const cellClass = [
+		styles.cell,
+		migrated ? styles.cellMigrated : saved ? styles.cellSaved : "",
+		isPending ? styles.cellPending : "",
+	].join(" ");
+
 	return (
 		<button
 			type="button"
-			className={`${styles.cell} ${saved ? styles.cellSaved : ""} ${isPending ? styles.cellPending : ""}`}
+			className={cellClass}
 			onClick={handleClick}
+			disabled={migrated}
 		>
 			<span className={styles.cellName}>{imageName || "-"}</span>
 		</button>

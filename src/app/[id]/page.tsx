@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import clientPromise from "@/lib/mongodb";
-import { getSavedImageIds } from "@/lib/actions";
+import { getSavedImageIds, getMigratedImageNames } from "@/lib/actions";
 import ImageRow from "@/components/image-row";
 import SaveAllButton from "@/components/save-all-button";
 import styles from "./page.module.css";
@@ -27,16 +27,20 @@ async function getUser(id: string) {
 async function getImages(userId: string): Promise<WithId<Document>[]> {
 	const client = await clientPromise;
 	const db = client.db(process.env.MONGODB_DATABASE);
-	return db.collection("Image").find({ userId, deleted: false }).toArray();
+	return db.collection("Image").find({ userId, deleted: false }).sort({ name: 1 }).toArray();
 }
 
 async function ImageGrid({ id, email }: { id: string; email: string }) {
 	const images = await getImages(id);
 	let error: string | null = null;
 	let savedIds: string[] = [];
+	let migratedNames = new Set<string>();
 
 	try {
-		savedIds = await getSavedImageIds(id);
+		[savedIds, migratedNames] = await Promise.all([
+			getSavedImageIds(id),
+			getMigratedImageNames(),
+		]);
 	} catch (e) {
 		error = e instanceof Error ? e.message : "저장 데이터 파일을 읽지 못했습니다.";
 	}
@@ -80,6 +84,7 @@ async function ImageGrid({ id, email }: { id: string; email: string }) {
 								imageId={imgId}
 								imageName={String(img.name ?? "")}
 								saved={savedSet.has(imgId)}
+								migrated={migratedNames.has(String(img.name ?? ""))}
 							/>
 						);
 					})}

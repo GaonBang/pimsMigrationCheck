@@ -192,6 +192,24 @@ export async function getSavedUserIds(): Promise<Set<string>> {
 	return new Set(data.map((e) => e.id));
 }
 
+// ─── Migration ────────────────────────────────────────────────────────────
+
+const MIGRATION_FILE_PATH = path.join(DATA_DIR, "migration.json");
+
+async function readMigration(): Promise<string[]> {
+	return readJsonFile(
+		MIGRATION_FILE_PATH,
+		(value): value is string[] =>
+			Array.isArray(value) && value.every((entry) => typeof entry === "string"),
+		[],
+	);
+}
+
+export async function getMigratedImageNames(): Promise<Set<string>> {
+	const data = await readMigration();
+	return new Set(data);
+}
+
 // ─── Domains ───────────────────────────────────────────────────────────────
 
 interface DomainEntry {

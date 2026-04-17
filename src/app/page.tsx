@@ -18,7 +18,7 @@ async function getUsers(query?: string): Promise<WithId<Document>[]> {
 	const client = await clientPromise;
 	const db = client.db(process.env.MONGODB_DATABASE);
 	const filter = query ? { email: { $regex: query, $options: "i" } } : {};
-	return db.collection("User").find(filter).toArray();
+	return db.collection("User").find(filter).sort({ email: 1 }).toArray();
 }
 
 async function UserGrid({ q }: { q?: string }) {
